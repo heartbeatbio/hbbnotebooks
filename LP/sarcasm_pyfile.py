@@ -34,9 +34,9 @@ def analyze_tif(file):
     file = Path(file)
     sarc = Structure(str(file), pixelsize=pixelsize)
 
-    sarc.detect_sarcomeres(max_patch_size=(2048, 2048),progress_notifier=None)
+    sarc.detect_sarcomeres(max_patch_size=(2048, 2048))
     sarc.full_analysis_structure(frames="all")
-    sarc.remove_intermediate_tiffs()
+    sarc.remove_intermediate_tiffs()ß
 
     d = Export.get_structure_dict(sarc)
 

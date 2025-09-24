@@ -133,9 +133,9 @@ if __name__ == "__main__":
         if platemap_files:
             for pm in platemap_files:
                 shutil.copy2(pm, out_dir / pm.name)
-            print(f"✅ Copied {len(platemap_files)} platemap file(s) to {out_dir}")
+            print(f"Copied {len(platemap_files)} platemap file(s) to {out_dir}")
         else:
-            print("⚠️ No platemap file found.")
+            print("No platemap file found.")
 
         print(f"📂 All results saved to {out_dir}")
     else:

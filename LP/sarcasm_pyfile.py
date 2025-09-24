@@ -7,26 +7,38 @@ from tqdm import tqdm
 import shutil
 import datetime
 
-
 from sarcasm import Structure
 from sarcasm.export import Export
 
 # --- SETTINGS ---
-folder = Path(r"/Volumes/volume2/2025/D-Disease Modeling Team/C-MYBPC3/2025/00_ToAnalyse/SP/2D-staining/40x/SP25DC9-10-11_Plate_22270/w4_analysis")
+folder = Path(r"/Users/lokesh.pimpale/Desktop/work_dir/sarcomere/1/1")
 n_pools = 3
 pixelsize = 0.1699
+# Set to substring to filter (e.g. "xxx"), or None to analyze ALL
+filter_substring = "_w4"   # change to None for all files
 # ----------------
 
-# find all tif files in folder
-tif_files = list(folder.glob("*.TIF"))
+# Make folder for per-file Excel results
+results_dir = folder.parent / f"{folder.name}_all_analysed_results"
+results_dir.mkdir(parents=True, exist_ok=True)
 
-# filter: only those without existing *_scalars.xlsx
-tif_files_to_process = [
-    f for f in tif_files
-    if not (f.parent / f"{f.stem}_scalars.xlsx").exists()
+# find all tif/tiff files (case insensitive)
+tif_files = [
+    f for f in folder.glob("*")
+    if f.suffix.lower() in [".tif", ".tiff"]
 ]
 
-print(f"{len(tif_files)} tif-files found")
+# filter by substring if provided
+if filter_substring:
+    tif_files = [f for f in tif_files if filter_substring in f.name]
+
+# filter: only those without existing results in results_dir
+tif_files_to_process = [
+    f for f in tif_files
+    if not (results_dir / f"{f.stem}_scalars.xlsx").exists()
+]
+
+print(f"{len(tif_files)} tif-files matched filter")
 print(f"{len(tif_files_to_process)} need processing")
 
 # function for analysis of single tif-file
@@ -36,7 +48,7 @@ def analyze_tif(file):
 
     sarc.detect_sarcomeres(max_patch_size=(2048, 2048))
     sarc.full_analysis_structure(frames="all")
-    sarc.remove_intermediate_tiffs()ß
+    sarc.remove_intermediate_tiffs()
 
     d = Export.get_structure_dict(sarc)
 
@@ -53,9 +65,14 @@ def analyze_tif(file):
             continue
 
     df = pd.DataFrame([clean])
-    out_xlsx = file.parent / f"{file.stem}_scalars.xlsx"
-    df.T.to_excel(out_xlsx)
-    return str(out_xlsx)
+    temp_out = file.parent / f"{file.stem}_scalars.xlsx"
+    df.T.to_excel(temp_out)
+
+    # move to results_dir
+    final_out = results_dir / temp_out.name
+    shutil.move(str(temp_out), final_out)
+
+    return str(final_out)
 
 
 if __name__ == "__main__":
@@ -68,21 +85,17 @@ if __name__ == "__main__":
                             desc="Processing files"):
                 results.append(res)
 
-        print("\n✅ Processing finished.")
-        print(f"Processed {len(results)} / {len(tif_files)} total TIFs")
+        print("\n Processing finished.")
+        print(f"Processed {len(results)} / {len(tif_files)} matched TIFs")
     else:
-        print("🎉 All TIF files already processed — nothing to do.")
+        print("All matched TIF files already processed.")
 
     # ============================
     # Combine all *_scalars.xlsx
     # ============================
-    input_dir = Path(folder)
     all_dfs = []
-
-    for file in input_dir.glob("*.*"):
-        if file.suffix.lower() not in [".xls", ".xlsx"]:
-            continue
-        if "_platemap" in file.name:  # skip temp files
+    for file in results_dir.glob("*.xlsx"):
+        if "_platemap" in file.name or "combined_output" in file.name:
             continue
         try:
             engine = "openpyxl" if file.suffix.lower() == ".xlsx" else "xlrd"
@@ -101,22 +114,22 @@ if __name__ == "__main__":
         combined = pd.concat(all_dfs, ignore_index=True)
         print(combined.head())
 
-        out_file = input_dir / "combined_output.xlsx"
-        combined.to_excel(out_file, index=False)
-        print(f"✅ Saved combined dataframe to {out_file}")
+        combined_file = results_dir / "combined_output.xlsx"
+        combined.to_excel(combined_file, index=False)
+        print(f"✅ Saved combined dataframe to {combined_file}")
 
         # ============================
         # Create new output folder
         # ============================
         today = datetime.datetime.today().strftime("%y%m%d")
-        out_dir = input_dir.parent / f"sarcasm_analysis_{input_dir.name}_{today}"
+        out_dir = folder.parent / f"sarcasm_analysis_{folder.name}_{today}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # Copy combined output
-        shutil.copy2(out_file, out_dir / out_file.name)
+        shutil.move(str(combined_file), out_dir / combined_file.name)
 
-        # Copy platemap (if exists)
-        platemap_files = list(input_dir.glob("*_platemap.*"))
+        # Copy platemap (if exists in original folder)
+        platemap_files = list(folder.glob("*_platemap.*"))
         if platemap_files:
             for pm in platemap_files:
                 shutil.copy2(pm, out_dir / pm.name)
